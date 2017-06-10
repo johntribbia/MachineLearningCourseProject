@@ -1,0 +1,146 @@
+---
+title: "Machine Learning Course Project"
+author: "John Tribbia"
+date: "June 7, 2017"
+output: 
+html_document: 
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+wd <- "/Volumes/FreeAgent GoFlex Drive/work/Data_Science_Coursera/MachineLearning/week_4/ProgrammingAssignment/"
+```  
+***  
+  
+#### I. Synopsis
+##### This analysis uses data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and strives to quantify how well they perform barbell lifts in 5 different ways.The data for this project come from the following source: http://groupware.les.inf.puc-rio.br/har.
+  
+##### The basic goal of this analysis is to predict the manner in which the participants did the exercise. I use the "classe" variable on which to make predictions. The R scripts and correpsonding output below will: 1. load and preprocess data, 2. describe how the model was built, 3. describe cross validation techniques employed, and 4. use the prediction model to make predictions on 20 different test cases.
+  
+***  
+#### II. Data Loading and Preprocessing the Data
+##### 1. Loading Packages and Data
+```{r data load,warning=FALSE}
+# a. Load packages
+list.of.packages <- c("dplyr","ggplot2","gridExtra","stringr","caret","randomForest","rpart","rpart.plot")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
+library(dplyr,warn.conflicts = FALSE, quietly=TRUE)
+library(ggplot2,warn.conflicts = FALSE, quietly=TRUE)
+library(gridExtra,warn.conflicts = FALSE, quietly=TRUE)
+library(stringr,warn.conflicts = FALSE, quietly=TRUE)
+library(caret,warn.conflicts = FALSE, quietly=TRUE)
+library(randomForest,warn.conflicts = FALSE, quietly=TRUE)
+library(rpart,warn.conflicts = FALSE, quietly=TRUE)
+library(rpart.plot,warn.conflicts = FALSE, quietly=TRUE)
+
+# b. Set working directory where you want to store the unzipped datafiles
+setwd(wd)
+
+# c. Unzip and Extract data from url
+train_file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(train_file, destfile = "pml-training.csv", mode = "wb") # download file from url in directory 
+df_train <- tbl_df(read.csv("./pml-training.csv",na.strings=c("NA","#DIV/0!", ""))) # import data to workspace as tbl_df in dplyr
+
+validate_file <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(validate_file, destfile = "pml-testing.csv", mode = "wb") # download file from url in directory 
+df_validate <- tbl_df(read.csv("./pml-testing.csv",na.strings=c("NA","#DIV/0!", ""))) # import data to workspace as tbl_df in dplyr
+```  
+##### 2. Inspect the Data
+```{r inspect,warning=FALSE,results="hide"}
+# d. inspect data
+df_train
+head(df_train)
+
+df_validate
+summary(df_validate)
+```  
+##### 3. Preprocess the Data
+```{r process,warning=FALSE}
+# remove columns containing *only* NA values
+# select relevant columns to be used in analysis 
+df_train1 <- df_train %>%
+  select_if(colSums(is.na(.)) == 0) %>%
+  select(roll_belt:classe)
+
+## split train data into training and test sets with a 75% partition to train:test
+set.seed(999)
+train_cut <- createDataPartition(y=df_train1$classe, p=0.75, list=FALSE)
+df_train_final <- df_train1[train_cut, ] 
+df_test_final <- df_train1[-train_cut, ]
+
+```  
+***  
+  
+#### III. Model Building
+##### 1. What is the frequency distribution of the classe variable?
+```{r classe, warning=FALSE}
+# a. bar plot classe variable on the training dataset
+qplot(classe, data = df_train_final, geom = "bar", main = "Frequency Distribution of Classe Variable (levels = A, B, C, D, E)")
+
+```  
+  
+##### Summary: The figure above shows the frequency distribution of the classe variable on the training dataset. Classe A occurs most frequently and level D least frequently.   
+  
+  
+##### 2. Models
+###### a. Model 1: Decision Tree
+```{r fit1, warning=FALSE}
+
+# fit model with method = "class"
+fit1 <- rpart(classe ~ ., data = df_train_final, method = "class")
+
+# calculate predictions
+pred1 <- predict(fit1, df_test_final, type = "class")
+```  
+  
+```{r decision tree, warning=FALSE}
+# inspect decision tree
+rpart.plot(fit1, main="Classification Tree", extra=100, under=TRUE, tweak = 1.5, fallen.leaves = FALSE, space = 0, gap = 0, compress = FALSE)
+```  
+  
+  
+```{r dt confusion matrix, warning=FALSE}
+# inspect confusion matrix by cross-tabulating prediction verus training set actuals
+confusionMatrix( df_test_final$classe, pred1)
+```  
+  
+##### Summary: The confusion matrix above show that the overall accuracy of the decision tree model is approximately 74 percent and the out of sample error based on our fitted model applied to the testing data set is 24 percent. In other words, about 3 out of 4 movements are accurately classified using the decision tree model.
+  
+  
+###### b. Model 2: Random Forest
+```{r fit2, warning=FALSE} 
+
+# fit model using 3-fold cross validations to avoid overfitting
+fit2 <- train(classe ~ . , method = "rf", trControl = trainControl(method = "cv", number = 3), data = df_train_final)
+
+# calculate predictions
+pred2 <- predict(fit2, df_test_final)
+
+# print summary of model
+print(fit2)
+```  
+  
+  
+```{r rf confusion matrix, warning=FALSE}
+# inspect confusion matrix by cross-tabulating prediction verus training set actuals
+confusionMatrix(df_test_final$classe, pred2)
+```  
+  
+##### Summary: The confusion matrix above show that the overall accuracy of the random forest model is approximately 99.3 percent. So, the out of sample error based on our fitted model applied to the testing data set is 0.7 percent. In other words, better than 9 out of 10 movements are accurately classified using the random forest model model. This is a major improvement compared to the decision tree classification model above. The random forest model was fit with 3-fold cross validation in an effort to reduce overfitting. With this type of accuracy, however, it may suggest there are possibly other elements within the model like the selected features that are contributing to this overfitting. Further diagnostics outside of the scope of this project are needed to verify.
+  
+  
+##### 3. Making Predictions
+```{r fit3, warning=FALSE} 
+# calculate predictions on 20 cases
+pred_final <- predict(fit2, df_validate)
+
+# write predictions
+pred_final
+
+```  
+  
+  
+***  
