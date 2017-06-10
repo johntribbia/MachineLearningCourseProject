@@ -9,7 +9,7 @@ html_document:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-wd <- "/Volumes/FreeAgent GoFlex Drive/work/Data_Science_Coursera/MachineLearning/week_4/ProgrammingAssignment/"
+wd <- ".../Data_Science_Coursera/MachineLearning/week_4/ProgrammingAssignment/"
 ```  
 ***  
   
